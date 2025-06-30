@@ -1,25 +1,27 @@
-# A simple test that checks the temperature initialization
-# via ascii file in a 2D chunk geometry.
-# Sets a harmonic perturbation to the temperature field,
-# and lower and upper temperature boundary conditions.
-
+# The following model is used to set up present-day
+# tectonic model for the Central and Eastern US in ASPECT.
+# The temperatures are inverted from a tomography model
+# and the equivalent buoyancy generates instantaneous
+# flow that is used to compare with the seismicity in this
+# region
 set Dimension                              = 3
 set CFL number                             = 1.0
 set End time                               = 0
-set Output directory                       = output_static_dislocation_diffusion_Pder_fine_slip
+set Output directory                       = output_heterogeneous_model
 set Start time                             = 0
-set Adiabatic surface temperature          = 1500.0
+set Adiabatic surface temperature          = 1573.0
 set Surface pressure                       = 0
 set Use years in output instead of seconds = true
-#set Nonlinear solver scheme                = IMPES
 set Pressure normalization                 = no
 set Nonlinear solver scheme                = iterated Advection and Stokes
 
+# We use a reference adiabatic profile that uses reference
+# densities based on PREM model
 subsection Adiabatic conditions model
   set Model name = ascii data
 
   subsection Ascii data model
-    set Data directory = data/
+    set Data directory = ./
     set Data file name = ascii_reference_temperature.txt
   end
 end
@@ -33,31 +35,38 @@ subsection Gravity model
 end
 
 
+# We use a chunk model based on the latitude and longitude
+# coordinates corresponding to the region. We only model 
+# upper mantle for the region
 subsection Geometry model
   set Model name = chunk
 
   subsection Chunk
     set Chunk minimum longitude = -95.66048
     set Chunk maximum longitude = -70.950048
-    set Longitude repetitions = 40
+    set Longitude repetitions = 20
     set Chunk minimum latitude = 23.995097
     set Chunk maximum latitude = 43.031487
-    set Latitude repetitions = 40
+    set Latitude repetitions = 20
     set Chunk inner radius = 5710000
     set Chunk outer radius = 6370000
-    set Radius repetitions = 5
+    set Radius repetitions = 4
   end
 end
 
 
+# The initial temperatures are inverted from the
+# tomography data.
 subsection Initial temperature model
   set Model name = ascii data
   subsection Ascii data model
-    set Data directory       = data/
-    set Data file name       = initial_temperature_Pder.txt
+    set Data directory       = ./
+    set Data file name       = initial_temperature.txt 
   end
 end
 
+# We use surface temperature and approximate temperature
+# at the based of upper mantle for boundary conditions
 subsection Boundary temperature model
   set Model name = spherical constant
   subsection Spherical constant
@@ -67,72 +76,46 @@ subsection Boundary temperature model
 end
 
 
-## not used in the final models, but used for testing with crust and the upper mantle
-#subsection Compositional fields
-#  set Number of fields = 2
-#  set Names of fields  = upper_crust, lower_crust
-#end
-#
-# 
-#subsection Initial composition model
-#  set Model name = function
-#  subsection Function
-#    set Coordinate system    = spherical
-#    set Variable names       = r, phi, theta
-#    set Function expression  = if (r >= 6345e3, 1, 0); if (r >= 6325e3 & r < 6345e3, 1, 0)
-#  end
-#end
-
 # Values taken from Chap 5 Turcotte, table 5.3
 # very similar to the default values in aspect
 subsection Material model
   set Model name = diffusion dislocation
 
   subsection Diffusion dislocation
-#    set Reference temperature = 293
     set Minimum strain rate = 5e-19
-    set Minimum viscosity = 1e19
-    set Maximum viscosity = 1e25
+    set Minimum viscosity   = 1e19
+    set Maximum viscosity   = 1e24
     set Effective viscosity coefficient = 1.0
-    set Reference viscosity = 1e21
 
     set Thermal diffusivity = 0.8e-6
-    set Heat capacity = 1.25e3
+    set Heat capacity       = 1.25e3
     set Thermal expansivities = 2e-5
 
     set Viscosity averaging scheme = harmonic
-#
     set Grain size = 5e-3
-    set Prefactors for diffusion creep = 1.5e-16   # values for quartzite, diabase from Burov (2010)
+    
+    # values for quartzite, diabase from Burov (2010)
+    set Prefactors for diffusion creep = 1.5e-16 
     set Stress exponents for diffusion creep = 1
-    set Grain size exponents for diffusion creep = 2 # values for dislocation creep in crust and diffusion creep in mantle
+    set Grain size exponents for diffusion creep = 3
     set Activation energies for diffusion creep = 3e5
     set Activation volumes for diffusion creep = 6e-6
-#
     set Prefactors for dislocation creep = 0.3e-22
     set Stress exponents for dislocation creep =  3.5
     set Activation energies for dislocation creep =  5.3e5
     set Activation volumes for dislocation creep = 2e-5
   end
-
-
-#  subsection Simple compressible model 
-#    set Reference compressibility = 0
-#  end
-
 end
 
 subsection Mesh refinement
   set Initial adaptive refinement        = 0
-  set Initial global refinement          = 1
+  set Initial global refinement          = 2
   set Strategy                           = temperature
 end
 
-
 subsection Boundary velocity model
-  set Prescribed velocity boundary indicators =
+#  set Prescribed velocity boundary indicators =
   set Tangential velocity boundary indicators = inner, east, west, north, south
-#  set Zero velocity boundary indicators       = east, west, north, south
 end
 
 subsection Boundary temperature model
@@ -140,17 +123,21 @@ subsection Boundary temperature model
 end
 
 #Free surface at top
-subsection Free surface
-  set Free surface boundary indicators = top
-  set Free surface stabilization theta = 0.5
+subsection Mesh deformation
+  set Mesh deformation boundary indicators = top: free surface
+
+  subsection Free surface
+    set Free surface stabilization theta = 0.5
+  end
 end
+
 
 subsection Postprocess
   set List of postprocessors = visualization, velocity statistics, temperature statistics, heat flux statistics, topography
   subsection Visualization
-    set List of output variables = density, viscosity, error indicator, stress, strain rate, dynamic topography
+    set List of output variables = material properties, error indicator, stress, strain rate, dynamic topography
     set Time between graphical output = 0
-#    set Output format = vtk
+    set Output format = vtu
     set Interpolate output = true
   end
   subsection Topography
@@ -158,10 +145,12 @@ subsection Postprocess
   end
 end
 
-
+# We use matrix-free solver and geometric multigrid preconditioner
+# to reduce memory consumption.
 subsection Solver parameters
   subsection Stokes solver parameters
-    set Linear solver tolerance = 1.e-7
-    set Number of cheap Stokes solver steps = 30
+    set Linear solver tolerance                         = 1e-6
+    set Number of cheap Stokes solver steps             = 5000
+    set GMRES solver restart length                     = 400
   end
 end
